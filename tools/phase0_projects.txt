@@ -1,0 +1,15 @@
+# Phase 0 sample: public dbt projects.
+# Format: <local_name> <git_url> <subdir_containing_dbt_project.yml> <kind>
+# kind: project = real analytics project | package = dbt package (models live in integration_tests)
+jaffle_shop_duckdb https://github.com/dbt-labs/jaffle_shop_duckdb . project
+jaffle_shop_modern https://github.com/dbt-labs/jaffle-shop . project
+tuva_core https://github.com/tuva-health/tuva-core . project
+snowflake_monitoring https://github.com/get-select/dbt-snowflake-monitoring . project
+dbt_artifacts https://github.com/brooklyn-data/dbt_artifacts . package
+automate_dv https://github.com/Datavault-UK/automate-dv . package
+elementary https://github.com/elementary-data/dbt-data-reliability . package
+dbt_expectations https://github.com/calogica/dbt-expectations . package
+transfermarkt https://github.com/dcaribou/transfermarkt-datasets dbt project
+dbt_bootcamp https://github.com/nordquant/complete-dbt-bootcamp-zero-to-hero . project
+portable_stack https://github.com/cnstlungu/portable-data-stack-dagster . project
+local_data_stack https://github.com/l-mds/local-data-stack . project

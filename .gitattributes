@@ -1,0 +1,8 @@
+# Normalise to LF in the repository. Without this, committing from Windows
+# stores CRLF and `ruff format --check` fails on Linux CI runners.
+* text=auto eol=lf
+
+*.png binary
+*.gif binary
+*.jpg binary
+*.ico binary

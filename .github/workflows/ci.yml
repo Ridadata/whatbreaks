@@ -1,0 +1,55 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+# Least privilege by default. Nothing in CI needs write access, and whatbreaks
+# itself must never require secrets -- that property is what lets it run on
+# pull requests from forks.
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+      - run: uv python install 3.12
+      - run: uv sync --extra dev
+      - name: ruff check
+        run: uv run ruff check .
+      - name: ruff format
+        run: uv run ruff format --check src tests
+      - name: mypy (strict)
+        run: uv run mypy
+
+  test:
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+        python: ["3.10", "3.11", "3.12", "3.13"]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+      - run: uv python install ${{ matrix.python }}
+      - run: uv sync --extra dev --python ${{ matrix.python }}
+      - name: pytest
+        run: uv run pytest --cov --cov-report=term-missing
+
+  # NOTE: the "never touches the network" guarantee is enforced by an autouse
+  # fixture in tests/conftest.py that blocks socket creation for every
+  # non-oracle test, so it is covered by the `test` job above rather than
+  # needing a separate one.
