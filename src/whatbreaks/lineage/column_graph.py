@@ -208,11 +208,12 @@ class ColumnGraphBuilder:
             sql_was_compiled_by_dbt=recovered.is_high_fidelity,
         )
 
-        # Columns the model names explicitly. Anything else in its schema
-        # arrived via a star, which is a materially different relationship:
-        # "you dropped a column this model happens to pass through" reads very
-        # differently from "you dropped a column this model selects by name".
-        explicit = _explicitly_named(recovered.sql, self._dialect)
+        # Column names the model mentions anywhere. An UPSTREAM column absent
+        # from this set reached the output only via a star, which is a
+        # materially different relationship: "you dropped a column this model
+        # passes through" reads very differently from - and breaks differently
+        # to - "you dropped a column this model names".
+        named = _named_columns(recovered.sql, self._dialect)
 
         edges: list[ColumnEdge] = []
         unresolved: list[ColumnRef] = []
@@ -231,12 +232,7 @@ class ColumnGraphBuilder:
             # The kind describes how the DOWNSTREAM column uses its inputs, so
             # it comes from the root projection - not from the leaf, which only
             # says where the value originated.
-            kind = (
-                EdgeKind.STAR_EXPANDED
-                if explicit is not None and column.lower() not in explicit
-                else _kind_of(root)
-            )
-            found = self._walk(root, ref, relation_to_node, base_confidence, kind)
+            found = self._walk(root, ref, relation_to_node, base_confidence, _kind_of(root), named)
             if found:
                 edges.extend(found)
             else:
@@ -273,6 +269,7 @@ class ColumnGraphBuilder:
         relation_to_node: dict[str, str],
         base_confidence: Confidence,
         kind: EdgeKind,
+        named: set[str] | None = None,
     ) -> list[ColumnEdge]:
         """Collect edges from a sqlglot lineage tree.
 
@@ -294,11 +291,18 @@ class ColumnGraphBuilder:
                 parent_id = relation_to_node.get(table.lower())
                 column = _column_of(current.name)
                 if parent_id and column:
+                    # Star-expansion is a property of THIS upstream column: it
+                    # reached the output without ever being named.
+                    edge_kind = (
+                        EdgeKind.STAR_EXPANDED
+                        if named is not None and column.lower() not in named
+                        else kind
+                    )
                     edges.append(
                         ColumnEdge(
                             downstream=downstream,
                             upstream=ColumnRef(parent_id, column),
-                            kind=kind,
+                            kind=edge_kind,
                             confidence=base_confidence,
                         )
                     )
@@ -393,30 +397,28 @@ def _column_of(name: str) -> str:
     return name.rsplit(".", 1)[-1].strip('"')
 
 
-def _explicitly_named(sql: str, dialect: str | None) -> set[str] | None:
-    """Output names the model writes out by hand.
+def _named_columns(sql: str, dialect: str | None) -> set[str] | None:
+    """Every column name the query mentions explicitly, in ANY scope.
 
-    `None` means we could not tell, in which case nothing is claimed to be
-    star-expanded rather than guessing.
+    Deliberately not limited to the top-level projection. The dominant dbt
+    idiom ends in `select * from final`, so a top-level check labels every
+    column star-expanded - including ones computed by name inside a CTE, such
+    as `count(order_id) as number_of_orders`. Dropping `order_id` there
+    *errors*; calling it star-expanded understates breakage on the single most
+    common pattern in dbt. Found by running the CLI on jaffle_shop, not by
+    reading the code.
+
+    `None` means we could not parse, in which case nothing is claimed to be
+    star-expanded rather than guessed at.
     """
     try:
         tree = sqlglot.parse_one(sql, dialect=dialect)
     except Exception:
         return None
-    if not isinstance(tree, exp.Query):
-        return None
-    try:
-        selects = list(tree.selects)
-    except Exception:
-        return None
     names: set[str] = set()
-    for projection in selects:
-        if isinstance(projection, exp.Star) or (
-            isinstance(projection, exp.Column) and isinstance(projection.this, exp.Star)
-        ):
-            continue
-        name = projection.alias_or_name
-        if name:
+    for column in tree.find_all(exp.Column):
+        name = column.name
+        if name and name != "*":
             names.add(name.lower())
     return names
 

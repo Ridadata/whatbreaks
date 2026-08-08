@@ -128,6 +128,44 @@ def test_star_expansion_produces_one_edge_per_column(write_manifest) -> None:
     assert [e.upstream for e in graph.upstream_of(ColumnRef(DOWN, "b"))] == [ColumnRef(UP, "b")]
 
 
+def test_column_named_inside_a_cte_is_not_called_star_expanded(write_manifest) -> None:
+    """Regression: the dominant dbt idiom ends in `select * from final`.
+
+    Judging star-expansion from the top-level projection labelled EVERY column
+    star-expanded, including ones computed by name inside a CTE. Since
+    STAR_EXPANDED is exempt from `breaks_query`, that silently under-reported
+    breakage on the most common pattern in dbt. Found by running the CLI on
+    jaffle_shop, not by reading the code.
+    """
+    nodes = upstream({}, "up", ["order_id", "customer_id"])
+    nodes[DOWN] = model_node(
+        "down",
+        raw_code=(
+            "with final as ("
+            "  select customer_id, count(order_id) as number_of_orders "
+            "  from {{ ref('up') }} group by customer_id"
+            ") select * from final"
+        ),
+        depends_on=[UP],
+    )
+    graph, _ = graph_for(write_manifest, nodes)
+
+    edges = graph.upstream_of(ColumnRef(DOWN, "number_of_orders"))
+    assert [e.upstream for e in edges] == [ColumnRef(UP, "order_id")]
+    assert edges[0].kind is not EdgeKind.STAR_EXPANDED
+    assert edges[0].kind.breaks_query, "dropping order_id errors; this must say so"
+
+
+def test_a_genuinely_passed_through_column_is_star_expanded(write_manifest) -> None:
+    """The converse: a column never named anywhere really is star-expanded."""
+    nodes = upstream({}, "up", ["a", "b"])
+    nodes[DOWN] = model_node("down", raw_code="select * from {{ ref('up') }}", depends_on=[UP])
+    graph, _ = graph_for(write_manifest, nodes)
+    edges = graph.upstream_of(ColumnRef(DOWN, "a"))
+    assert edges[0].kind is EdgeKind.STAR_EXPANDED
+    assert not edges[0].kind.breaks_query
+
+
 def test_literal_columns_have_no_upstream_and_are_not_unresolved(write_manifest) -> None:
     nodes = upstream({}, "up", ["a"])
     nodes[DOWN] = model_node(
