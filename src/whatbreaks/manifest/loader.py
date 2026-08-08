@@ -147,6 +147,7 @@ def _build_node(uid: str, raw: dict[str, Any], resource_type: ResourceType) -> N
         materialized=(str(config.get("materialized")) if config.get("materialized") else None),
         contract_enforced=bool(contract.get("enforced")),
         unique_key=(str(config.get("unique_key")) if config.get("unique_key") else None),
+        language=str(raw.get("language") or "sql"),
         source_name=source_name,
     )
 

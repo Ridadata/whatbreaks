@@ -58,13 +58,26 @@ class Node:
     materialized: str | None = None
     contract_enforced: bool = False
     unique_key: str | None = None
+    language: str = "sql"
     # sources only
     source_name: str | None = None
 
     @property
+    def is_python(self) -> bool:
+        """dbt Python models are out of scope, and must say so plainly.
+
+        Their `raw_code` is Python, so reporting "SQL parse error" for one is a
+        misleading diagnostic that sends users looking for a problem in SQL
+        they never wrote.
+        """
+        return self.language.lower() == "python"
+
+    @property
     def is_executable_sql(self) -> bool:
         """Does this node have SQL we are expected to analyse?"""
-        return self.resource_type in (ResourceType.MODEL, ResourceType.SNAPSHOT)
+        return (
+            self.resource_type in (ResourceType.MODEL, ResourceType.SNAPSHOT) and not self.is_python
+        )
 
     @property
     def declared_column_names(self) -> tuple[str, ...]:
