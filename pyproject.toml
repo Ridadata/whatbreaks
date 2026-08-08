@@ -28,6 +28,7 @@ dependencies = [
     "sqlglot>=25.0",
     "jinja2>=3.1",
     "click>=8.1",
+    "pyyaml>=6.0",
 ]
 
 [project.optional-dependencies]
@@ -37,6 +38,7 @@ dev = [
     "hypothesis>=6.100",
     "mypy>=1.10",
     "ruff>=0.6",
+    "types-PyYAML>=6.0",
 ]
 
 [project.scripts]
@@ -92,3 +94,4 @@ markers = [
 [tool.coverage.run]
 source = ["src/whatbreaks"]
 branch = true
+
