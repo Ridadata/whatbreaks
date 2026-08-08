@@ -20,6 +20,7 @@ import click
 
 from whatbreaks import OUTPUT_SCHEMA_VERSION, __version__
 from whatbreaks.analysis import Analysis, CoverageReport
+from whatbreaks.diff import Finding, Findings, Severity, classify, diff_analyses
 from whatbreaks.errors import InputError
 from whatbreaks.lineage.column_graph import ColumnRef
 
@@ -69,11 +70,6 @@ def main() -> None:
     """
 
 
-@main.group()
-def debug() -> None:
-    """Inspect what whatbreaks sees. Output shape is not a stable API."""
-
-
 _manifest_arg = click.argument(
     "manifest", type=click.Path(exists=False, dir_okay=False, path_type=Path)
 )
@@ -85,6 +81,155 @@ _root_opt = click.option(
     "Unlocks seed CSV headers and project vars.",
 )
 _json_opt = click.option("--json", "as_json", is_flag=True, help="Emit JSON.")
+
+
+_SEVERITY_STYLE = {
+    Severity.BREAKING: ("BREAKING", "red"),
+    Severity.POSSIBLY_BREAKING: ("MAYBE", "yellow"),
+    Severity.SAFE: ("safe", "green"),
+    Severity.INFO: ("info", None),
+}
+
+# What `--fail-on` means, from strictest to most permissive.
+_FAIL_THRESHOLDS = {
+    "breaking": Severity.BREAKING,
+    "possibly-breaking": Severity.POSSIBLY_BREAKING,
+    "never": None,
+}
+
+
+@main.command("check")
+@click.option(
+    "--base",
+    required=True,
+    type=click.Path(dir_okay=False, path_type=Path),
+    help="manifest.json from the base commit (what main looks like today).",
+)
+@click.option(
+    "--head",
+    required=True,
+    type=click.Path(dir_okay=False, path_type=Path),
+    help="manifest.json from the change under review.",
+)
+@click.option("--base-root", type=click.Path(file_okay=False, path_type=Path), default=None)
+@click.option("--head-root", type=click.Path(file_okay=False, path_type=Path), default=None)
+@click.option(
+    "--fail-on",
+    type=click.Choice(list(_FAIL_THRESHOLDS)),
+    default="breaking",
+    show_default=True,
+    help="Minimum severity that fails the run. Uncertainty is always REPORTED; "
+    "failing CI on it is opt-in, because a linter that cries wolf gets removed.",
+)
+@_json_opt
+def check(
+    base: Path,
+    head: Path,
+    base_root: Path | None,
+    head_root: Path | None,
+    fail_on: str,
+    as_json: bool,
+) -> None:
+    """Report what a change breaks downstream.
+
+    Compares the column contracts of two manifests. This is a graph diff, not a
+    text diff: reformatting produces nothing, and a model whose columns changed
+    because an upstream SELECT * changed is caught even though its own file was
+    never touched.
+    """
+    base_analysis = _load(base, base_root)
+    head_analysis = _load(head, head_root)
+
+    diff = diff_analyses(base_analysis, head_analysis)
+    findings = classify(diff, head_analysis, base_analysis)
+    coverage = findings.coverage
+
+    threshold = _FAIL_THRESHOLDS[fail_on]
+    failing = (
+        [f for f in findings.items if f.severity.rank >= threshold.rank]
+        if threshold is not None
+        else []
+    )
+
+    if as_json:
+        click.echo(
+            json.dumps(_findings_payload(findings, fail_on, failing), indent=2, sort_keys=True)
+        )
+    else:
+        _render_findings(findings, coverage)
+
+    sys.exit(EXIT_FINDINGS if failing else EXIT_OK)
+
+
+def _findings_payload(findings: Findings, fail_on: str, failing: list[Finding]) -> dict[str, Any]:
+    coverage = findings.coverage
+    return {
+        "schema_version": OUTPUT_SCHEMA_VERSION,
+        "fail_on": fail_on,
+        "failed": bool(failing),
+        "findings": [
+            {
+                "rule": f.rule,
+                "title": f.title,
+                "severity": f.severity.value,
+                "confidence": f.confidence.label,
+                "model": f.node_name,
+                "column": f.column,
+                "summary": f.summary,
+                "detail": f.detail,
+                "impact": {
+                    "columns": [str(c) for c in f.impact.columns],
+                    "models": list(f.impact.models),
+                    "tests": list(f.impact.tests),
+                    "exposures": list(f.impact.exposures),
+                    "query_breaks": list(f.impact.query_breaks),
+                },
+            }
+            for f in findings.items
+        ],
+        "coverage": (
+            {
+                "total_models": coverage.total_models,
+                "exact": coverage.exact,
+                "partial": coverage.partial,
+                "unknown": coverage.unknown,
+                "analysed_pct": coverage.analysed_pct,
+                "complete": coverage.is_complete,
+                "reasons": coverage.reasons,
+            }
+            if coverage
+            else None
+        ),
+    }
+
+
+def _render_findings(findings: Findings, coverage: CoverageReport | None) -> None:
+    for finding in findings.items:
+        label, colour = _SEVERITY_STYLE[finding.severity]
+        prefix = click.style(f"{label:>8}", fg=colour, bold=colour == "red")
+        click.echo(f"{prefix}  {finding.rule}  {finding.summary}")
+        if finding.detail:
+            click.echo(f"          {finding.detail}")
+        click.echo(f"          confidence: {finding.confidence.label}")
+
+    if not findings.items:
+        click.secho("no changes to model column contracts", fg="green")
+
+    # Coverage is never omitted. "No breaking changes found" without saying how
+    # much was analysed is a lie by omission.
+    if coverage is not None:
+        click.echo()
+        _echo_coverage(coverage)
+        if not coverage.is_complete:
+            click.secho(
+                "note: analysis was incomplete, so absence of findings is not proof of safety",
+                fg="yellow",
+            )
+
+
+@main.group()
+def debug() -> None:
+    """Inspect what whatbreaks sees. Output shape is not a stable API."""
 
 
 @debug.command("coverage")

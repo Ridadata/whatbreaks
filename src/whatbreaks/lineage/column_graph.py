@@ -119,6 +119,22 @@ class ColumnGraph:
     edges: tuple[ColumnEdge, ...] = ()
     unresolved: tuple[ColumnRef, ...] = ()
     required: tuple[RequiredColumn, ...] = ()
+    # Every parent column each model MENTIONS, whether or not it is projected
+    # and whether or not the parent still has it. Derived from the SQL text, so
+    # it survives the parent's schema changing underneath - which is exactly
+    # what happens on the head side of a column removal.
+    references: tuple[RequiredColumn, ...] = ()
+
+    def mentions(self, ref: ColumnRef) -> tuple[str, ...]:
+        """Models whose SQL still names `ref`, regardless of resolution.
+
+        The question "did this pull request also update the consumers?" cannot
+        be answered from the head graph's edges: once the column is gone from
+        the parent, nothing resolves against it and every edge disappears.
+        Textual references survive that, so this is what makes the difference
+        between a real break and a change the author already handled.
+        """
+        return tuple(sorted({r.downstream_model for r in self.references if r.upstream == ref}))
 
     def upstream_of(self, ref: ColumnRef) -> tuple[ColumnEdge, ...]:
         return tuple(e for e in self.edges if e.downstream == ref)
@@ -171,37 +187,51 @@ class ColumnGraphBuilder:
         edges: list[ColumnEdge] = []
         unresolved: list[ColumnRef] = []
         required: list[RequiredColumn] = []
+        references: list[RequiredColumn] = []
         for uid, node in self._manifest.nodes.items():
             if not node.is_executable_sql:
                 continue
             schema = self._inference.schemas.get(uid)
-            if schema is None or not schema.columns:
-                continue
-            node_edges, node_unresolved, node_required = self._build_for(node, schema.resolution)
+            # Edges need a resolved schema; textual references do not - and
+            # they are needed MOST when resolution failed, because a model
+            # broken *by* the change under review is exactly the one whose
+            # schema stops resolving. Skipping it here is what let a real
+            # breaking change be reported as safe.
+            resolution = schema.resolution if schema else Resolution.UNKNOWN
+            node_edges, node_unresolved, node_required, node_refs = self._build_for(
+                node, resolution, with_edges=bool(schema and schema.columns)
+            )
             edges.extend(node_edges)
             unresolved.extend(node_unresolved)
             required.extend(node_required)
+            references.extend(node_refs)
 
         # Deterministic output is a stated NFR, and sqlglot's traversal order
         # is not guaranteed stable across versions.
         edges.sort(key=lambda e: (*e.sort_key, e.kind.value))
-        required.sort(key=lambda r: (r.downstream_model, r.upstream.node_id, r.upstream.column))
+        key = lambda r: (r.downstream_model, r.upstream.node_id, r.upstream.column)  # noqa: E731
+        required.sort(key=key)
+        references.sort(key=key)
         return ColumnGraph(
             tuple(_dedupe(edges)),
             tuple(sorted(set(unresolved))),
             tuple(dict.fromkeys(required)),
+            tuple(dict.fromkeys(references)),
         )
 
     # ------------------------------------------------------------------
     def _build_for(
-        self, node: Node, resolution: Resolution
-    ) -> tuple[list[ColumnEdge], list[ColumnRef], list[RequiredColumn]]:
+        self, node: Node, resolution: Resolution, with_edges: bool = True
+    ) -> tuple[list[ColumnEdge], list[ColumnRef], list[RequiredColumn], list[RequiredColumn]]:
         recovered = self._recovery.recover(node)
         if not recovered.ok or recovered.sql is None:
-            return [], [], []
+            return [], [], [], []
 
         schema, relation_to_node = self._parent_context(node)
-        columns = self._inference.schemas[node.unique_id].columns[:MAX_COLUMNS_PER_MODEL]
+        model_schema = self._inference.schemas.get(node.unique_id)
+        columns = (
+            model_schema.columns[:MAX_COLUMNS_PER_MODEL] if with_edges and model_schema else ()
+        )
 
         base_confidence = confidence_for(
             resolution=resolution,
@@ -242,12 +272,17 @@ class ColumnGraphBuilder:
                     unresolved.append(ref)
 
         projected = {e.upstream for e in edges}
+        mentioned = self._referenced_columns(recovered.sql, relation_to_node)
+        references = [
+            RequiredColumn(node.unique_id, ref, EdgeKind.UNKNOWN, base_confidence)
+            for ref in mentioned
+        ]
         required = [
             RequiredColumn(node.unique_id, ref, EdgeKind.PREDICATE, base_confidence)
-            for ref in self._referenced_columns(recovered.sql, relation_to_node)
+            for ref in mentioned
             if ref not in projected
         ]
-        return edges, unresolved, required
+        return edges, unresolved, required, references
 
     def _parent_context(self, node: Node) -> tuple[dict[str, Any], dict[str, str]]:
         schema: dict[str, Any] = {}
@@ -322,23 +357,50 @@ class ColumnGraphBuilder:
         except Exception:
             return []
 
-        # Map every alias back to its real relation, so `l.id` on
-        # `from wb_model_up l` resolves to the parent node.
-        alias_to_relation: dict[str, str] = {}
+        # Map every name a column can be qualified by back to real relations.
+        #
+        # Table aliases are the easy half. The half that matters is CTE names:
+        # the canonical dbt model reads `with orders as (select * from
+        # {{ ref('stg_orders') }}) ... select orders.status`, so the qualifier
+        # is a CTE, not a table. Missing that made the tool report a genuine
+        # breaking change on jaffle_shop as SAFE - a false negative, which is
+        # the worst outcome this tool can produce.
+        alias_to_relations: dict[str, set[str]] = {}
+
+        def note(alias: str, relation: str) -> None:
+            if alias and relation:
+                alias_to_relations.setdefault(alias.lower(), set()).add(relation.lower())
+
         for table in tree.find_all(exp.Table):
             real = (table.name or "").lower()
-            if not real:
-                continue
-            alias_to_relation[real] = real
-            alias = table.alias_or_name
-            if alias:
-                alias_to_relation[alias.lower()] = real
+            note(real, real)
+            note(table.alias_or_name, real)
 
-        # A single unaliased parent means unqualified columns can only be its.
-        sole_relation = None
-        relations = {v for v in alias_to_relation.values() if v in relation_to_node}
-        if len(relations) == 1:
-            sole_relation = next(iter(relations))
+        # A CTE resolves to whatever relations it reads from. Chains resolve by
+        # repeating until stable, so `a -> b -> real_table` works.
+        for _ in range(4):
+            changed = False
+            for cte in tree.find_all(exp.CTE):
+                name = (cte.alias_or_name or "").lower()
+                if not name:
+                    continue
+                targets: set[str] = set()
+                for inner in cte.this.find_all(exp.Table) if cte.this else []:
+                    targets |= alias_to_relations.get((inner.name or "").lower(), set())
+                if targets - alias_to_relations.get(name, set()):
+                    alias_to_relations.setdefault(name, set()).update(targets)
+                    changed = True
+            if not changed:
+                break
+
+        # A single parent means unqualified columns can only be its.
+        parents = {
+            relation
+            for relations in alias_to_relations.values()
+            for relation in relations
+            if relation in relation_to_node
+        }
+        sole = next(iter(parents)) if len(parents) == 1 else None
 
         found: list[ColumnRef] = []
         for column in tree.find_all(exp.Column):
@@ -346,12 +408,13 @@ class ColumnGraphBuilder:
             if not name or name == "*":
                 continue
             qualifier = (column.table or "").lower()
-            relation = alias_to_relation.get(qualifier) if qualifier else sole_relation
-            if relation is None:
-                continue
-            parent_id = relation_to_node.get(relation)
-            if parent_id:
-                found.append(ColumnRef(parent_id, name))
+            relations = alias_to_relations.get(qualifier, set()) if qualifier else set()
+            if not relations and sole is not None:
+                relations = {sole}
+            for relation in relations:
+                parent_id = relation_to_node.get(relation)
+                if parent_id:
+                    found.append(ColumnRef(parent_id, name))
         return list(dict.fromkeys(found))
 
     @staticmethod
