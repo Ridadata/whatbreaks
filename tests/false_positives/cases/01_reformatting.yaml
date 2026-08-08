@@ -1,0 +1,12 @@
+description: whitespace, casing and comments only
+why: |
+  A text diff sees every line as changed. A graph diff must see nothing,
+  because the column contract is byte-identical.
+models:
+  orders:
+    base: "select 1 as order_id, 2 as amount from tbl"
+    head: |
+      SELECT
+          1 AS order_id,   -- the primary key
+          2 AS amount
+      FROM tbl

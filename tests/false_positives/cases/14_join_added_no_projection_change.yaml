@@ -1,0 +1,8 @@
+description: a join is added but the projection is unchanged
+why: |
+  Adding a join can change row counts but here it changes no output column.
+  The schema contract is untouched.
+models:
+  orders:
+    base: "select t1.a as a from t1"
+    head: "select t1.a as a from t1 left join t2 on t1.a = t2.a"

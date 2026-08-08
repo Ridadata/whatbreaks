@@ -1,0 +1,8 @@
+description: a WHERE clause is added
+why: |
+  Filtering changes which rows exist, not which columns. whatbreaks reasons
+  about schema, and must not imply a schema change here.
+models:
+  orders:
+    base: "select a, b from tbl"
+    head: "select a, b from tbl where b > 0"

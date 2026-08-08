@@ -1,0 +1,9 @@
+description: materialization changes from view to table
+why: |
+  A deployment concern, not a contract change. WB007 will cover this later as
+  POSSIBLY_BREAKING with justification; until then it must not fire at all.
+models:
+  orders:
+    base: "select 1 as a from tbl"
+    config:
+      materialized: view

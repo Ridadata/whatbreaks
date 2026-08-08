@@ -1,0 +1,8 @@
+description: identifiers gain explicit double quotes
+why: |
+  Quoting is a style choice. The resolved column names are the same, so the
+  contract is the same.
+models:
+  orders:
+    base: "select a as first_col, b as second_col from tbl"
+    head: 'select "a" as "first_col", "b" as "second_col" from tbl'

@@ -1,0 +1,7 @@
+description: two independent CTEs swap order
+why: |
+  Declaration order of independent CTEs has no semantic effect.
+models:
+  orders:
+    base: "with x as (select 1 as a from t1), y as (select 2 as b from t2) select x.a, y.b from x, y"
+    head: "with y as (select 2 as b from t2), x as (select 1 as a from t1) select x.a, y.b from x, y"

@@ -1,0 +1,7 @@
+description: the query is wrapped in one more CTE layer
+why: |
+  A common refactor. Output columns are unchanged, so the contract is unchanged.
+models:
+  orders:
+    base: "select 1 as a, 2 as b from tbl"
+    head: "with final as (select 1 as a, 2 as b from tbl) select * from final"

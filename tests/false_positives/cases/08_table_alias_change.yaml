@@ -1,0 +1,8 @@
+description: a table alias is renamed
+why: |
+  Aliases are local to the query. The projected names are what downstream sees
+  and they are identical.
+models:
+  orders:
+    base: "select o.a as a from tbl o"
+    head: "select orders_table.a as a from tbl orders_table"

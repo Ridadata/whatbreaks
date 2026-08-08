@@ -49,6 +49,25 @@ jobs:
       - name: pytest
         run: uv run pytest --cov --cov-report=term-missing
 
+  false-positive-gate:
+    # A RELEASE GATE, not a test suite. A linter's false-positive rate decides
+    # whether it survives contact with a real team far more than its feature
+    # count does: one wrong BREAKING on a reformatting commit and it gets
+    # removed from the workflow that week.
+    #
+    # Run as its own required job so a regression here is unmissable rather
+    # than one red dot among two hundred.
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+      - run: uv python install 3.12
+      - run: uv sync --extra dev
+      - name: no-op changes must raise no alarm
+        run: uv run pytest tests/false_positives -v
+
   # NOTE: the "never touches the network" guarantee is enforced by an autouse
   # fixture in tests/conftest.py that blocks socket creation for every
   # non-oracle test, so it is covered by the `test` job above rather than

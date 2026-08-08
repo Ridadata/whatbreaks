@@ -1,0 +1,8 @@
+description: same columns, different order in the SELECT
+why: |
+  Column order is not part of a model's contract for anything that references
+  columns by name, which is everything dbt generates.
+models:
+  orders:
+    base: "select 1 as a, 2 as b, 3 as c from tbl"
+    head: "select 3 as c, 1 as a, 2 as b from tbl"

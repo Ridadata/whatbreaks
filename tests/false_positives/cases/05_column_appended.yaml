@@ -1,0 +1,8 @@
+description: a column is added to the end of a model
+why: |
+  Additive schema change. Existing consumers select by name and are unaffected.
+  Reported as WB003/SAFE, which must not fail CI.
+models:
+  orders:
+    base: "select 1 as a, 2 as b from tbl"
+    head: "select 1 as a, 2 as b, 3 as c from tbl"

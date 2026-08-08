@@ -1,0 +1,12 @@
+description: a SQL comment is added inside a CTE
+why: |
+  Comments are not semantics. This is the single most common no-op commit.
+models:
+  orders:
+    base: "with s as (select 1 as a from tbl) select * from s"
+    head: |
+      with s as (
+          -- pull the identifier straight through
+          select 1 as a from tbl
+      )
+      select * from s

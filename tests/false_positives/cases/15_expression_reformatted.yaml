@@ -1,0 +1,15 @@
+description: an expression is rewritten to an equivalent form
+why: |
+  coalesce(a, 0) and ifnull-style rewrites keep the same output column name and
+  the same inputs. Value semantics may warrant WB005 later, but never a
+  schema-breaking finding.
+models:
+  orders:
+    base: "select coalesce(a, 0) as amount from tbl"
+    head: |
+      select
+          coalesce(
+              a,
+              0
+          ) as amount
+      from tbl

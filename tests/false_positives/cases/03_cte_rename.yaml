@@ -1,0 +1,8 @@
+description: a CTE is renamed
+why: |
+  CTEs are internal to a model and are not addressable in dbt. Renaming one
+  changes nothing anybody downstream can observe.
+models:
+  orders:
+    base: "with staged as (select 1 as a from tbl) select * from staged"
+    head: "with renamed_step as (select 1 as a from tbl) select * from renamed_step"

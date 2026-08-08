@@ -89,6 +89,7 @@ addopts = "-q --strict-markers"
 markers = [
     "corpus: golden-file lineage tests over the difficult-SQL corpus",
     "oracle: slow tests that run real dbt against DuckDB for ground truth",
+    "false_positive: release gate - a no-op change must raise no alarm",
 ]
 
 [tool.coverage.run]

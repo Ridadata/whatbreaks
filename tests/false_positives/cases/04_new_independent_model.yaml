@@ -1,0 +1,9 @@
+description: a brand new model is added
+why: |
+  Adding a model cannot break anything that already exists. Nothing references
+  it yet, by definition.
+models:
+  orders:
+    base: "select 1 as a from tbl"
+  brand_new:
+    base: "select 1 as z from tbl"

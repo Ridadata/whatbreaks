@@ -1,0 +1,11 @@
+description: an upstream model gains a column; downstream is untouched
+why: |
+  The classic additive change through a chain. Nothing downstream loses
+  anything, so nothing should be reported as risky.
+models:
+  up:
+    base: "select 1 as a, 2 as b from tbl"
+    head: "select 1 as a, 2 as b, 3 as c from tbl"
+  down:
+    depends_on: [up]
+    base: "select a from {{ ref('up') }}"
