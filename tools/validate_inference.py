@@ -49,9 +49,7 @@ for path in sorted(root.rglob("target/manifest.json")):
     recovery = SqlRecovery(manifest, project_root=project_root)
     result = SchemaInference(manifest, recovery, project_root=project_root).infer()
 
-    models = {
-        uid: s for uid, s in result.schemas.items() if uid in manifest.models
-    }
+    models = {uid: s for uid, s in result.schemas.items() if uid in manifest.models}
     n = len(models)
     exact = sum(1 for s in models.values() if s.resolution is Resolution.EXACT)
     partial = sum(1 for s in models.values() if s.resolution is Resolution.PARTIAL)

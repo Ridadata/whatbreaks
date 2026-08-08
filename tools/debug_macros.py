@@ -1,4 +1,5 @@
 """Debug: why does the manifest macro registry not resolve package namespaces?"""
+
 from __future__ import annotations
 import json, sys, traceback
 from collections import defaultdict

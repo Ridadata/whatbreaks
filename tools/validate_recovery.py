@@ -20,9 +20,7 @@ from whatbreaks.sql import SqlRecovery, SqlSource
 PHASE0_RENDERED_PCT = 80.5
 
 root = Path(sys.argv[1])
-manifests = sorted(
-    p for p in root.rglob("target/manifest.json") if "dbt_packages" not in p.parts
-)
+manifests = sorted(p for p in root.rglob("target/manifest.json") if "dbt_packages" not in p.parts)
 
 total = ok = 0
 kinds: Counter[str] = Counter()
@@ -55,10 +53,7 @@ for path in manifests:
 print(f"{'project':<24}{'models':>7}{'rendered':>10}{'pct':>8}   macros(compiled/plain)")
 print("-" * 78)
 for project, n, good, pct, stats in rows:
-    print(
-        f"{project:<24}{n:>7}{good:>10}{pct:>7.1f}%   "
-        f"{stats['compiled']}/{stats['plain']}"
-    )
+    print(f"{project:<24}{n:>7}{good:>10}{pct:>7.1f}%   {stats['compiled']}/{stats['plain']}")
 
 overall = 100.0 * ok / total if total else 0.0
 print("-" * 78)

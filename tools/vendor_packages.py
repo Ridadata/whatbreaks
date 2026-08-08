@@ -71,9 +71,7 @@ def package_name_of(pkg_dir: Path) -> str | None:
     pj = pkg_dir / "dbt_project.yml"
     if not pj.exists():
         return None
-    m = re.search(
-        r"^\s*name\s*:\s*(.+)$", pj.read_text(encoding="utf-8", errors="replace"), re.M
-    )
+    m = re.search(r"^\s*name\s*:\s*(.+)$", pj.read_text(encoding="utf-8", errors="replace"), re.M)
     if not m:
         return None
     return re.sub(r"\s+#.*$", "", m.group(1)).strip().strip("'\"")
@@ -111,7 +109,8 @@ def vendor(project_dir: Path, depth: int = 0, seen: set[str] | None = None) -> N
             continue
         pkgs_dir.mkdir(parents=True, exist_ok=True)
         shutil.copytree(
-            src, dst,
+            src,
+            dst,
             ignore=shutil.ignore_patterns(
                 ".git", "dbt_packages", "target", "integration_tests", "logs"
             ),
@@ -135,7 +134,9 @@ def vendor(project_dir: Path, depth: int = 0, seen: set[str] | None = None) -> N
             # tag/branch may not exist shallow -- retry default branch
             subprocess.run(
                 ["git", "clone", "--depth", "1", "--quiet", url, str(tmp)],
-                capture_output=True, text=True, errors="replace",
+                capture_output=True,
+                text=True,
+                errors="replace",
             )
         if not tmp.exists():
             print(f"    vendor FAIL {url}")

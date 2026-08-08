@@ -261,8 +261,10 @@ def build_macro_registry(manifest: dict[str, Any], node: dict[str, Any]) -> dict
     def dispatch(macro_name: str, macro_namespace: Any = None, *a: Any, **k: Any):
         # dbt resolves adapter.dispatch('x') to <adapter>__x, then default__x
         for cand in (
-            f"duckdb__{macro_name}", f"postgres__{macro_name}",
-            f"default__{macro_name}", macro_name,
+            f"duckdb__{macro_name}",
+            f"postgres__{macro_name}",
+            f"default__{macro_name}",
+            macro_name,
         ):
             if cand in flat:
                 return flat[cand]
@@ -285,9 +287,9 @@ def build_macro_registry(manifest: dict[str, Any], node: dict[str, Any]) -> dict
         namespaces.clear()
         for pkg, macros in by_pkg.items():
             try:
-                mod = JINJA_ENV.from_string(
-                    "\n".join(m["macro_sql"] for m in macros)
-                ).make_module(globals_)
+                mod = JINJA_ENV.from_string("\n".join(m["macro_sql"] for m in macros)).make_module(
+                    globals_
+                )
                 got = [(m["name"], getattr(mod, m["name"], None)) for m in macros]
             except Exception:  # noqa: BLE001
                 # one bad macro must not poison an entire package
@@ -330,8 +332,17 @@ def render_raw_code(
         ctx = dict(macro_ctx)
         node_ctx = build_stub_context(node)
         # node-specific values (ref/this/model) win; adapter/execute/macros stay
-        for k in ("ref", "source", "this", "model", "config", "var", "env_var",
-                  "is_incremental", "target"):
+        for k in (
+            "ref",
+            "source",
+            "this",
+            "model",
+            "config",
+            "var",
+            "env_var",
+            "is_incremental",
+            "target",
+        ):
             ctx[k] = node_ctx[k]
     else:
         ctx = build_stub_context(node)
@@ -486,15 +497,20 @@ def read_profile_name(project_dir: Path) -> str:
     if not m:
         return "default"
     val = m.group(1)
-    val = re.sub(r"\s+#.*$", "", val)          # strip inline comment
-    val = val.strip().strip("'\"").strip()      # strip quotes
+    val = re.sub(r"\s+#.*$", "", val)  # strip inline comment
+    val = val.strip().strip("'\"").strip()  # strip quotes
     return val or "default"
 
 
 def run_dbt(args: list[str], cwd: Path, env: dict[str, str], timeout: int = 900):
     return subprocess.run(
-        args, cwd=str(cwd), env=env, capture_output=True, text=True,
-        timeout=timeout, errors="replace",
+        args,
+        cwd=str(cwd),
+        env=env,
+        capture_output=True,
+        text=True,
+        timeout=timeout,
+        errors="replace",
     )
 
 
@@ -667,8 +683,7 @@ def probe_project(
         # evidence that we are missing schema. Parent state is used to explain
         # a surviving star, not to predict one.
         parent_states = [
-            resolution.get(d, "UNKNOWN")
-            for d in (node.get("depends_on") or {}).get("nodes", [])
+            resolution.get(d, "UNKNOWN") for d in (node.get("depends_on") or {}).get("nodes", [])
         ]
         parents_all_known = all(s == "EXACT" for s in parent_states) if parent_states else True
 
@@ -708,9 +723,7 @@ def probe_project(
                 )
             else:
                 mr.resolution = "EXACT"
-                mr.resolution_reason = (
-                    "star_resolved_via_cte" if mr.any_star else ""
-                )
+                mr.resolution_reason = "star_resolved_via_cte" if mr.any_star else ""
         except Exception as e:  # noqa: BLE001
             mr.resolution = "UNKNOWN"
             mr.resolution_reason = f"qualify:{type(e).__name__}"
@@ -734,7 +747,9 @@ def summarise(results: list[ProjectResult]) -> dict[str, Any]:
 
     for r in results:
         if not r.dbt_parse_ok:
-            rows.append({"project": r.name, "status": "PARSE_FAILED", "error": r.dbt_parse_error[:200]})
+            rows.append(
+                {"project": r.name, "status": "PARSE_FAILED", "error": r.dbt_parse_error[:200]}
+            )
             continue
         n = len(r.models)
         c = Counter(m.resolution for m in r.models)
@@ -748,7 +763,10 @@ def summarise(results: list[ProjectResult]) -> dict[str, Any]:
 
         for m in r.models:
             if m.render_fail:
-                render_fails[m.render_fail.split(":")[0] + (":" + m.render_fail.split(":")[1] if ":" in m.render_fail else "")] += 1
+                render_fails[
+                    m.render_fail.split(":")[0]
+                    + (":" + m.render_fail.split(":")[1] if ":" in m.render_fail else "")
+                ] += 1
             if m.parse_fail:
                 parse_fails[m.parse_fail] += 1
 
@@ -765,28 +783,42 @@ def summarise(results: list[ProjectResult]) -> dict[str, Any]:
         agg["declared_cols"] += declared
 
         pct = lambda x: round(100.0 * x / n, 1) if n else 0.0
-        rows.append({
-            "project": r.name,
-            "kind": PROJECT_KIND.get(r.name, "?"),
-            "adapter": r.adapter,
-            "models": n,
-            "compiled_code_%": pct(compiled),
-            "rend_naive_%": pct(rendered_naive),
-            "rendered_%": pct(rendered),
-            "parsed_%": pct(parsed),
-            "any_star_%": pct(stars),
-            "top_star_%": pct(tl_stars),
-            "declared_cols_%": pct(declared),
-            "EXACT_%": pct(c["EXACT"]),
-            "PARTIAL_%": pct(c["PARTIAL"]),
-            "UNKNOWN_%": pct(c["UNKNOWN"]),
-            "sources_with_cols": f"{r.n_sources_with_columns}/{r.n_sources}",
-        })
+        rows.append(
+            {
+                "project": r.name,
+                "kind": PROJECT_KIND.get(r.name, "?"),
+                "adapter": r.adapter,
+                "models": n,
+                "compiled_code_%": pct(compiled),
+                "rend_naive_%": pct(rendered_naive),
+                "rendered_%": pct(rendered),
+                "parsed_%": pct(parsed),
+                "any_star_%": pct(stars),
+                "top_star_%": pct(tl_stars),
+                "declared_cols_%": pct(declared),
+                "EXACT_%": pct(c["EXACT"]),
+                "PARTIAL_%": pct(c["PARTIAL"]),
+                "UNKNOWN_%": pct(c["UNKNOWN"]),
+                "sources_with_cols": f"{r.n_sources_with_columns}/{r.n_sources}",
+            }
+        )
 
     n = agg["models"] or 1
-    overall = {k: round(100.0 * agg[k] / n, 1) for k in
-               ("compiled", "rendered_naive", "rendered", "parsed", "any_star",
-                "top_level_star", "declared_cols", "EXACT", "PARTIAL", "UNKNOWN")}
+    overall = {
+        k: round(100.0 * agg[k] / n, 1)
+        for k in (
+            "compiled",
+            "rendered_naive",
+            "rendered",
+            "parsed",
+            "any_star",
+            "top_level_star",
+            "declared_cols",
+            "EXACT",
+            "PARTIAL",
+            "UNKNOWN",
+        )
+    }
     overall["total_models"] = agg["models"]
 
     # unweighted mean across projects -- guards against one huge project
@@ -802,16 +834,12 @@ def summarise(results: list[ProjectResult]) -> dict[str, Any]:
         if not sel:
             continue
         tot = sum(r["models"] for r in sel)
-        wmean = lambda k: round(
-            sum(r[k] * r["models"] for r in sel) / tot, 1
-        ) if tot else 0.0
+        wmean = lambda k: round(sum(r[k] * r["models"] for r in sel) / tot, 1) if tot else 0.0
         by_kind[kind] = {
             "projects": len(sel),
             "models": tot,
             "EXACT_weighted_%": wmean("EXACT_%"),
-            "EXACT_mean_per_project_%": round(
-                sum(r["EXACT_%"] for r in sel) / len(sel), 1
-            ),
+            "EXACT_mean_per_project_%": round(sum(r["EXACT_%"] for r in sel) / len(sel), 1),
             "rendered_weighted_%": wmean("rendered_%"),
             "per_project": {r["project"]: r["EXACT_%"] for r in sel},
         }
@@ -869,9 +897,7 @@ def main() -> int:
         print(f"  -> {name} ({pdir})", flush=True)
         try:
             results.append(
-                probe_project(
-                    name, pdir, Path(args.dbt), workdir, PROJECT_VARS.get(name, "")
-                )
+                probe_project(name, pdir, Path(args.dbt), workdir, PROJECT_VARS.get(name, ""))
             )
         except Exception:  # noqa: BLE001
             traceback.print_exc()

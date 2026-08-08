@@ -1,4 +1,5 @@
 """Debug helper: show exactly why one model resolves the way it does."""
+
 from __future__ import annotations
 import json, sys
 from pathlib import Path
@@ -20,7 +21,7 @@ models = {k: v for k, v in nodes.items() if v.get("resource_type") == "model"}
 seeds = {k: v for k, v in nodes.items() if v.get("resource_type") == "seed"}
 
 print(f"adapter={adapter} dialect={dialect} models={len(models)} seeds={len(seeds)}")
-print("seed columns declared:", {v['name']: len(v.get('columns') or {}) for v in seeds.values()})
+print("seed columns declared:", {v["name"]: len(v.get("columns") or {}) for v in seeds.values()})
 
 for uid, node in models.items():
     if target and node.get("name") != target:
@@ -40,12 +41,21 @@ for uid, node in models.items():
         continue
     print("--- qualify with EMPTY schema ---")
     try:
-        q = qualify(tree.copy(), schema={}, dialect=dialect or None,
-                    infer_schema=True, validate_qualify_columns=False)
+        q = qualify(
+            tree.copy(),
+            schema={},
+            dialect=dialect or None,
+            infer_schema=True,
+            validate_qualify_columns=False,
+        )
         sel = q if isinstance(q, exp.Select) else q.find(exp.Select)
         outs = [e.alias_or_name for e in sel.expressions] if sel else []
-        stars = [e for e in (sel.expressions if sel else []) if isinstance(e, exp.Star)
-                 or (isinstance(e, exp.Column) and isinstance(e.this, exp.Star))]
+        stars = [
+            e
+            for e in (sel.expressions if sel else [])
+            if isinstance(e, exp.Star)
+            or (isinstance(e, exp.Column) and isinstance(e.this, exp.Star))
+        ]
         print("outputs:", outs)
         print("unresolved top-level stars:", len(stars))
     except Exception as e:
@@ -59,18 +69,36 @@ for uid, node in models.items():
             continue
         cols = list((n2.get("columns") or {}).keys())
         if n2.get("resource_type") == "seed" and not cols:
-            cols = ["id", "first_name", "last_name", "order_id", "amount",
-                    "user_id", "order_date", "status", "payment_method"]
+            cols = [
+                "id",
+                "first_name",
+                "last_name",
+                "order_id",
+                "amount",
+                "user_id",
+                "order_date",
+                "status",
+                "payment_method",
+            ]
         if cols:
             leaf_schema[_ident("model", n2["name"])] = {c: "UNKNOWN" for c in cols}
     print("leaf schema keys:", list(leaf_schema))
     try:
-        q = qualify(tree.copy(), schema=leaf_schema, dialect=dialect or None,
-                    infer_schema=True, validate_qualify_columns=False)
+        q = qualify(
+            tree.copy(),
+            schema=leaf_schema,
+            dialect=dialect or None,
+            infer_schema=True,
+            validate_qualify_columns=False,
+        )
         sel = q if isinstance(q, exp.Select) else q.find(exp.Select)
         outs = [e.alias_or_name for e in sel.expressions] if sel else []
-        stars = [e for e in (sel.expressions if sel else []) if isinstance(e, exp.Star)
-                 or (isinstance(e, exp.Column) and isinstance(e.this, exp.Star))]
+        stars = [
+            e
+            for e in (sel.expressions if sel else [])
+            if isinstance(e, exp.Star)
+            or (isinstance(e, exp.Column) and isinstance(e.this, exp.Star))
+        ]
         print("outputs:", outs)
         print("unresolved top-level stars:", len(stars))
     except Exception as e:

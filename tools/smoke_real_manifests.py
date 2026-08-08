@@ -14,11 +14,7 @@ from whatbreaks.graph import CycleError, topological_sort
 from whatbreaks.manifest import load_manifest
 
 root = Path(sys.argv[1])
-manifests = sorted(
-    p
-    for p in root.rglob("target/manifest.json")
-    if "dbt_packages" not in p.parts
-)
+manifests = sorted(p for p in root.rglob("target/manifest.json") if "dbt_packages" not in p.parts)
 
 print(f"{len(manifests)} manifests\n")
 ok = fail = 0
