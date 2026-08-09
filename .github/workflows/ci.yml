@@ -49,6 +49,23 @@ jobs:
       - name: pytest
         run: uv run pytest --cov --cov-report=term-missing
 
+  docs:
+    # Documentation rots silently: the numbers in a README were measured once
+    # and nothing re-checks them. These do, so a claim that stops being true
+    # fails a build instead of quietly misleading a reader.
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+      - run: uv python install 3.12
+      - run: uv sync --extra dev
+      - name: every relative link resolves
+        run: uv run python tools/check_links.py .
+      - name: README's factual claims still hold
+        run: uv run python tools/verify_readme.py
+
   false-positive-gate:
     # A RELEASE GATE, not a test suite. A linter's false-positive rate decides
     # whether it survives contact with a real team far more than its feature
