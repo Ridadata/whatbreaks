@@ -23,6 +23,7 @@ from whatbreaks.analysis import Analysis, CoverageReport
 from whatbreaks.diff import Finding, Findings, Severity, classify, diff_analyses
 from whatbreaks.errors import InputError
 from whatbreaks.lineage.column_graph import ColumnRef
+from whatbreaks.report import render_markdown
 
 EXIT_OK = 0
 EXIT_FINDINGS = 1
@@ -121,14 +122,21 @@ _FAIL_THRESHOLDS = {
     help="Minimum severity that fails the run. Uncertainty is always REPORTED; "
     "failing CI on it is opt-in, because a linter that cries wolf gets removed.",
 )
-@_json_opt
+@click.option(
+    "--format",
+    "output_format",
+    type=click.Choice(["text", "json", "markdown"]),
+    default="text",
+    show_default=True,
+    help="text for humans, json for tooling, markdown for a PR comment.",
+)
 def check(
     base: Path,
     head: Path,
     base_root: Path | None,
     head_root: Path | None,
     fail_on: str,
-    as_json: bool,
+    output_format: str,
 ) -> None:
     """Report what a change breaks downstream.
 
@@ -151,10 +159,12 @@ def check(
         else []
     )
 
-    if as_json:
+    if output_format == "json":
         click.echo(
             json.dumps(_findings_payload(findings, fail_on, failing), indent=2, sort_keys=True)
         )
+    elif output_format == "markdown":
+        click.echo(render_markdown(findings), nl=False)
     else:
         _render_findings(findings, coverage)
 

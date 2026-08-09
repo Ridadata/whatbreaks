@@ -5,7 +5,7 @@ No warehouse, no secrets, no backend. See WHATBREAKS_PROJECT_PLAN.md.
 
 from __future__ import annotations
 
-__version__ = "0.1.0.dev0"
+__version__ = "0.1.0"
 
 # The JSON output schema is a public API and is versioned independently of the
 # tool, so consumers can pin to it. See plan section 22.

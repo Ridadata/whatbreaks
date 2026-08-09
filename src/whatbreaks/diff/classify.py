@@ -164,7 +164,7 @@ def _removed_models(diff: GraphDiff, head: Analysis, complete: bool) -> list[Fin
                 confidence=(
                     Confidence.CONFIRMED if severity is Severity.BREAKING else Confidence.LIKELY
                 ),
-                summary=f"model `{name}` was removed",
+                summary=f"model {name} was removed",
                 node_name=name,
                 detail=detail,
             )
@@ -229,7 +229,7 @@ def _removed_columns(
                     rule="WB001",
                     severity=severity,
                     confidence=confidence,
-                    summary=f"column `{change.name}.{column}` was removed",
+                    summary=f"column {change.name}.{column} was removed",
                     node_name=change.name,
                     node_id=change.node_id,
                     column=column,
@@ -241,18 +241,14 @@ def _removed_columns(
 
 
 def _impact_detail(impact: BlastRadius) -> str:
-    bits = [f"breaks {impact.summary()}"]
-    if impact.columns:
-        shown = ", ".join(str(c) for c in impact.columns[:6])
-        bits.append(f"downstream columns: {shown}")
-    if impact.query_breaks:
-        bits.append(
-            "models that break without a schema change (filter/join only): "
-            + ", ".join(impact.query_breaks[:6])
-        )
-    if impact.exposures:
-        bits.append("exposures: " + ", ".join(impact.exposures[:6]))
-    return "; ".join(bits)
+    """A one-line prose summary of the damage.
+
+    Deliberately does NOT enumerate the affected columns, tests and exposures:
+    those live on `Finding.impact` as structured data, and every renderer shows
+    them from there. Repeating them here produced a PR comment that said the
+    same thing twice.
+    """
+    return f"breaks {impact.summary()}"
 
 
 # ----------------------------------------------------------------- WB003
@@ -262,7 +258,7 @@ def _added_columns(diff: GraphDiff) -> list[Finding]:
             rule="WB003",
             severity=Severity.SAFE,
             confidence=Confidence.LIKELY,
-            summary=f"column `{change.name}.{column}` was added",
+            summary=f"column {change.name}.{column} was added",
             node_name=change.name,
             node_id=change.node_id,
             column=column,
@@ -280,7 +276,7 @@ def _unanalysable(diff: GraphDiff) -> list[Finding]:
             rule="WB900",
             severity=Severity.INFO,
             confidence=Confidence.UNKNOWN,
-            summary=f"`{name}` could not be compared",
+            summary=f"{name} could not be compared",
             node_name=name,
             detail=why,
         )

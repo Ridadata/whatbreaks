@@ -1,0 +1,8 @@
+blank_issues_enabled: true
+contact_links:
+  - name: Known limitations
+    url: https://github.com/Ridadata/whatbreaks/blob/main/docs/limitations.md
+    about: Several behaviours are deliberate and documented. Worth a look first.
+  - name: Security vulnerability
+    url: https://github.com/Ridadata/whatbreaks/security/advisories/new
+    about: Please report privately rather than in a public issue.

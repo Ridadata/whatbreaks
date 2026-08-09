@@ -1,0 +1,41 @@
+name: Release
+
+# Publishes on a version tag. Nothing here runs on a normal push, so a release
+# is always a deliberate act.
+on:
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: read
+
+jobs:
+  # A release must never ship something the gates would have rejected.
+  verify:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v5
+      - run: uv python install 3.12
+      - run: uv sync --extra dev
+      - run: uv run ruff check .
+      - run: uv run mypy
+      - run: uv run pytest
+      - name: false-positive gate
+        run: uv run pytest tests/false_positives
+
+  publish:
+    needs: verify
+    runs-on: ubuntu-latest
+    environment: pypi
+    permissions:
+      # Trusted Publishing: PyPI verifies this workflow's OIDC identity, so no
+      # long-lived API token exists to leak.
+      id-token: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v5
+      - run: uv build
+      - name: check metadata renders on PyPI
+        run: uvx twine check dist/*
+      - uses: pypa/gh-action-pypi-publish@release/v1

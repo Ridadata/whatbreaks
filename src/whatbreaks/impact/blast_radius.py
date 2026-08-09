@@ -11,9 +11,15 @@ to projection lineage:
 * required columns - the downstream model only filters, joins or groups on it,
   so it never reaches an output but its removal still errors.
 
-Traversal is over the **head** graph, i.e. the world after the change. If a pull
-request drops a column and updates its consumers in the same commit, there is
-nothing left pointing at it and there is correctly nothing to report.
+Traversal is over the **base** graph, i.e. the world before the change, and
+this is not interchangeable with head. Once a column is gone from its parent
+nothing resolves against it, so the head graph shows no consumers at all and
+would answer "nothing breaks" for every removal. Base says what depended on the
+column; `ColumnGraph.mentions` on the head side answers the separate question of
+whether the author already updated those consumers.
+
+Getting this backwards produced a false negative on jaffle_shop - a real
+breaking change reported as safe - which is why it is spelled out here.
 """
 
 from __future__ import annotations

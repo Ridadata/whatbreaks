@@ -245,18 +245,18 @@ class ColumnGraphBuilder:
         # to - "you dropped a column this model names".
         named = _named_columns(recovered.sql, self._dialect)
 
+        # Resolve every column in ONE call. sqlglot deduplicates the shared
+        # parse/qualify work across columns; doing it per column made a
+        # 500-model project miss the <20s target, because each model was parsed
+        # as many times as it has columns.
+        roots = self._lineage_for_all(recovered.sql, schema, columns)
+
         edges: list[ColumnEdge] = []
         unresolved: list[ColumnRef] = []
         for column in columns:
             ref = ColumnRef(node.unique_id, column)
-            try:
-                root = sqlglot_lineage(
-                    column,
-                    recovered.sql,
-                    schema=schema,
-                    dialect=self._dialect,
-                )
-            except Exception:
+            root = roots.get(column)
+            if root is None:
                 unresolved.append(ref)
                 continue
             # The kind describes how the DOWNSTREAM column uses its inputs, so
@@ -283,6 +283,32 @@ class ColumnGraphBuilder:
             if ref not in projected
         ]
         return edges, unresolved, required, references
+
+    def _lineage_for_all(
+        self, sql: str, schema: dict[str, Any], columns: tuple[str, ...]
+    ) -> dict[str, LineageNode]:
+        """Lineage for every requested column, in as few passes as possible.
+
+        Falls back to per-column resolution if the batch call is unavailable or
+        fails, so one awkward model degrades to slower rather than to nothing.
+        """
+        if not columns:
+            return {}
+        try:
+            result = sqlglot_lineage(None, sql, schema=schema, dialect=self._dialect)
+        except Exception:
+            result = None
+
+        if isinstance(result, dict):
+            return {name: node for name, node in result.items() if name in set(columns)}
+
+        out: dict[str, LineageNode] = {}
+        for column in columns:
+            try:
+                out[column] = sqlglot_lineage(column, sql, schema=schema, dialect=self._dialect)
+            except Exception:
+                continue
+        return out
 
     def _parent_context(self, node: Node) -> tuple[dict[str, Any], dict[str, str]]:
         schema: dict[str, Any] = {}
