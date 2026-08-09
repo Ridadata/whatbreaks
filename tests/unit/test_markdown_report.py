@@ -134,14 +134,21 @@ def test_short_ref_handles_unqualified_input() -> None:
 def test_incomplete_coverage_warning_is_outside_the_fold() -> None:
     """A reader who never expands the section must still see the caveat."""
     out = render_markdown(Findings((), coverage(exact=8, partial=2)))
-    warning_pos = out.index("not proof")
+    warning_pos = out.index("could not be fully analysed")
     fold_pos = out.index("<details>")
     assert warning_pos < fold_pos
 
 
+def test_incomplete_coverage_warns_about_further_impact() -> None:
+    """Wording regression: "absence of findings is not proof of safety" reads as
+    nonsense when findings are on screen. The caveat is that there may be MORE."""
+    out = render_markdown(Findings((finding(),), coverage(exact=8, partial=2)))
+    assert "further" in out
+
+
 def test_complete_coverage_has_no_warning() -> None:
     out = render_markdown(Findings((), coverage()))
-    assert "not proof" not in out
+    assert "could not be fully analysed" not in out
 
 
 def test_coverage_summary_counts_fully_resolved_not_analysed() -> None:

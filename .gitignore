@@ -23,3 +23,8 @@ htmlcov/
 target/
 dbt_packages/
 logs/
+
+# ...except the quickstart's manifests, which ARE the example. Without this the
+# README would point at a runnable example that is not in the repo.
+!examples/quickstart/base/target/
+!examples/quickstart/head/target/

@@ -63,7 +63,11 @@ jobs:
       - run: uv sync --extra dev
       - name: every relative link resolves
         run: uv run python tools/check_links.py .
-      - name: README's factual claims still hold
+      - name: the quickstart example is reproducible
+        run: |
+          uv run python examples/quickstart/build.py
+          git diff --exit-code examples/
+      - name: README claims hold and its images match the live tool
         run: uv run python tools/verify_readme.py
 
   false-positive-gate:

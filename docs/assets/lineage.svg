@@ -1,0 +1,23 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="860" height="300" viewBox="0 0 860 300" role="img" aria-label="Model-level versus column-level blast radius">
+<rect width="860" height="300" rx="10" fill="#12141a"/>
+<text x="28" y="40" fill="#6e7681" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="11" font-weight="normal" text-anchor="start">change under review</text>
+<text x="28" y="64" fill="#f47067" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="14" font-weight="bold" text-anchor="start">stg_orders.status  removed</text>
+<line x1="28" y1="80" x2="832" y2="80" stroke="#30363d" stroke-width="1"/>
+<rect x="28" y="102" width="380" height="164" rx="8" fill="#1b1e26"/>
+<text x="48" y="128" fill="#6e7681" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="12" font-weight="normal" text-anchor="start">dbt ls --select stg_orders+</text>
+<text x="48" y="152" fill="#d8a657" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="11" font-weight="normal" text-anchor="start">model granularity</text>
+<text x="48" y="180" fill="#c9d1d9" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="13" font-weight="normal" text-anchor="start">* customers</text>
+<text x="210" y="180" fill="#6e7681" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="11" font-weight="normal" text-anchor="start">affected?</text>
+<text x="48" y="204" fill="#c9d1d9" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="13" font-weight="normal" text-anchor="start">* orders</text>
+<text x="210" y="204" fill="#6e7681" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="11" font-weight="normal" text-anchor="start">affected?</text>
+<text x="48" y="234" fill="#6e7681" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="11" font-weight="normal" text-anchor="start">every model downstream, column or not</text>
+<rect x="452" y="102" width="380" height="164" rx="8" fill="#1b1e26"/>
+<text x="472" y="128" fill="#6e7681" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="12" font-weight="normal" text-anchor="start">whatbreaks</text>
+<text x="472" y="152" fill="#f47067" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="11" font-weight="normal" text-anchor="start">column granularity</text>
+<text x="472" y="180" fill="#c9d1d9" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="13" font-weight="normal" text-anchor="start">* orders.order_status</text>
+<text x="700" y="180" fill="#6e7681" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="11" font-weight="normal" text-anchor="start">selects it</text>
+<text x="472" y="204" fill="#c9d1d9" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="13" font-weight="normal" text-anchor="start">* customers</text>
+<text x="700" y="204" fill="#d8a657" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="11" font-weight="normal" text-anchor="start">filters on it</text>
+<text x="472" y="234" fill="#6e7681" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="11" font-weight="normal" text-anchor="start">exactly what touches the column</text>
+<text x="430" y="282" fill="#6e7681" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="11" font-weight="normal" text-anchor="middle">a filter-only dependency breaks the query without changing any column</text>
+</svg>

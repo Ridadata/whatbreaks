@@ -26,10 +26,6 @@ def fail(message: str) -> None:
     print(f"MISMATCH  {message}")
 
 
-def normalise(text: str) -> list[str]:
-    return [line.rstrip() for line in text.strip().splitlines()]
-
-
 def check_dependency_count() -> bool:
     data = tomllib.loads((ROOT / "pyproject.toml").read_text(encoding="utf-8"))
     actual = len(data["project"]["dependencies"])
@@ -46,46 +42,46 @@ def check_dependency_count() -> bool:
     return True
 
 
-def check_check_output(base: Path, head: Path) -> bool:
-    """The headline example must be what the tool actually prints."""
-    text = README.read_text(encoding="utf-8")
-    match = re.search(
-        r"\$ whatbreaks check --base [^\n]*\n\n(.*?)```", text, re.S
-    )
-    if match is None:
-        fail("could not find the headline `whatbreaks check` example")
-        return False
-    claimed = normalise(match.group(1))
+def check_assets_current() -> bool:
+    """The demo and lineage images are generated from the live tool.
 
-    result = subprocess.run(
-        [
-            sys.executable, "-m", "whatbreaks.cli",
-            "check", "--base", str(base), "--head", str(head), "--format", "text",
-        ],
-        capture_output=True, text=True, cwd=ROOT,
-    )
-    actual = normalise(result.stdout)
-    if claimed != actual:
-        fail("the headline example no longer matches real output")
-        print("  README says:")
-        for line in claimed:
-            print(f"    {line}")
-        print("  tool prints:")
-        for line in actual:
-            print(f"    {line}")
-        return False
-    print(f"OK        headline example matches real output ({len(actual)} lines)")
-    return True
+    Both know how to verify themselves, so this delegates rather than
+    reimplementing the comparison. An image nobody can re-derive is exactly the
+    unverifiable claim this project avoids everywhere else.
+    """
+    ok = True
+    for script in ("make_demo_svg.py", "make_lineage_svg.py"):
+        result = subprocess.run(
+            [sys.executable, str(ROOT / "tools" / script), "--check"],
+            capture_output=True,
+            text=True,
+            cwd=ROOT,
+        )
+        print("          " + (result.stdout.strip() or result.stderr.strip()))
+        ok &= result.returncode == 0
+    return ok
+
+
+def check_referenced_assets_exist() -> bool:
+    """Every image the README points at must actually be in the repo."""
+    text = README.read_text(encoding="utf-8")
+    ok = True
+    for src in re.findall(r'<img[^>]+src="([^"]+)"', text):
+        if src.startswith("http"):
+            continue
+        if not (ROOT / src).exists():
+            fail(f"README references a missing image: {src}")
+            ok = False
+    if ok:
+        print("OK        every referenced image exists")
+    return ok
 
 
 def main() -> int:
-    if len(sys.argv) < 3:
-        print("usage: verify_readme.py <base-manifest> <head-manifest>")
-        print("(skipping output checks; verifying static claims only)")
-        return 0 if check_dependency_count() else 1
-
     ok = check_dependency_count()
-    ok &= check_check_output(Path(sys.argv[1]), Path(sys.argv[2]))
+    ok &= check_referenced_assets_exist()
+    print("OK        generated assets:")
+    ok &= check_assets_current()
     print("\nRESULT:", "PASS" if ok else "FAIL")
     return 0 if ok else 1
 

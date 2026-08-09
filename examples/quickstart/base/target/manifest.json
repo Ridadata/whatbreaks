@@ -1,0 +1,130 @@
+{
+ "metadata": {
+  "dbt_schema_version": "https://schemas.getdbt.com/dbt/manifest/v12.json",
+  "dbt_version": "1.11.12",
+  "adapter_type": "duckdb",
+  "project_name": "shop"
+ },
+ "nodes": {
+  "seed.shop.raw_orders": {
+   "name": "raw_orders",
+   "resource_type": "seed",
+   "package_name": "shop",
+   "original_file_path": "seeds/raw_orders.csv",
+   "depends_on": {
+    "nodes": []
+   },
+   "columns": {
+    "id": {
+     "name": "id"
+    },
+    "user_id": {
+     "name": "user_id"
+    },
+    "order_date": {
+     "name": "order_date"
+    },
+    "status": {
+     "name": "status"
+    },
+    "amount": {
+     "name": "amount"
+    }
+   },
+   "config": {}
+  },
+  "model.shop.stg_orders": {
+   "name": "stg_orders",
+   "resource_type": "model",
+   "package_name": "shop",
+   "original_file_path": "models/stg_orders.sql",
+   "raw_code": "\nwith source as (\n    select * from {{ ref('raw_orders') }}\n),\nrenamed as (\n    select\n        id           as order_id,\n        user_id      as customer_id,\n        order_date,\n        status,\n        amount\n    from source\n)\nselect * from renamed\n",
+   "depends_on": {
+    "nodes": [
+     "seed.shop.raw_orders"
+    ]
+   },
+   "columns": {},
+   "config": {
+    "materialized": "view"
+   }
+  },
+  "model.shop.orders": {
+   "name": "orders",
+   "resource_type": "model",
+   "package_name": "shop",
+   "original_file_path": "models/orders.sql",
+   "raw_code": "\nwith orders as (\n    select * from {{ ref('stg_orders') }}\n)\nselect\n    orders.order_id,\n    orders.customer_id,\n    orders.status      as order_status,\n    orders.amount\nfrom orders\n",
+   "depends_on": {
+    "nodes": [
+     "model.shop.stg_orders"
+    ]
+   },
+   "columns": {
+    "order_id": {
+     "name": "order_id"
+    },
+    "customer_id": {
+     "name": "customer_id"
+    },
+    "order_status": {
+     "name": "order_status"
+    },
+    "amount": {
+     "name": "amount"
+    }
+   },
+   "config": {
+    "materialized": "view"
+   }
+  },
+  "model.shop.customers": {
+   "name": "customers",
+   "resource_type": "model",
+   "package_name": "shop",
+   "original_file_path": "models/customers.sql",
+   "raw_code": "\nwith completed as (\n    select * from {{ ref('stg_orders') }} where status = 'completed'\n)\nselect\n    customer_id,\n    count(order_id) as completed_orders,\n    sum(amount)     as lifetime_value\nfrom completed\ngroup by customer_id\n",
+   "depends_on": {
+    "nodes": [
+     "model.shop.stg_orders"
+    ]
+   },
+   "columns": {},
+   "config": {
+    "materialized": "view"
+   }
+  },
+  "test.shop.accepted_values_stg_orders_status": {
+   "name": "accepted_values_stg_orders_status",
+   "resource_type": "test",
+   "package_name": "shop",
+   "column_name": "status",
+   "attached_node": "model.shop.stg_orders",
+   "depends_on": {
+    "nodes": [
+     "model.shop.stg_orders"
+    ]
+   },
+   "test_metadata": {
+    "name": "accepted_values"
+   }
+  }
+ },
+ "sources": {},
+ "exposures": {
+  "exposure.shop.revenue_dashboard": {
+   "name": "revenue_dashboard",
+   "type": "dashboard",
+   "url": "https://bi.example.com/revenue",
+   "owner": {
+    "email": "analytics@example.com"
+   },
+   "depends_on": {
+    "nodes": [
+     "model.shop.orders"
+    ]
+   }
+  }
+ },
+ "macros": {}
+}

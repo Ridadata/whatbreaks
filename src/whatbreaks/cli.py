@@ -231,10 +231,17 @@ def _render_findings(findings: Findings, coverage: CoverageReport | None) -> Non
         click.echo()
         _echo_coverage(coverage)
         if not coverage.is_complete:
-            click.secho(
-                "note: analysis was incomplete, so absence of findings is not proof of safety",
-                fg="yellow",
+            # Wording matters here. "absence of findings is not proof of safety"
+            # reads as nonsense when findings are on screen; what incomplete
+            # coverage actually means is that there may be MORE than we found.
+            note = (
+                "some models could not be fully analysed, so there may be further "
+                "impact we cannot see"
+                if findings.items
+                else "some models could not be fully analysed, so the absence of "
+                "findings is not proof that nothing breaks"
             )
+            click.secho(f"note: {note}", fg="yellow")
 
 
 @main.group()

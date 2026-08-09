@@ -257,10 +257,10 @@ def _coverage_block(coverage: CoverageReport) -> str:
     if coverage.is_complete:
         return detail
     # Surfaced OUTSIDE the fold: a reader who never expands the section still
-    # has to see that absence of findings is not proof of safety.
+    # has to see the caveat.
     return (
-        "> ⚠️ Analysis was incomplete, so the absence of findings is not proof "
-        "that nothing breaks.\n\n" + detail
+        "> **Some models could not be fully analysed.** There may be further "
+        "impact that whatbreaks cannot see.\n\n" + detail
     )
 
 
