@@ -55,13 +55,26 @@ jobs:
           grep -qi "breaking" "$REPORT" || { echo "::error::not reported as breaking"; exit 1; }
           echo "OK: the action detected the breaking change"
 
-      - name: It must write a job summary
+      # NOTE: the job summary is deliberately NOT asserted here. GITHUB_STEP_SUMMARY
+      # is a separate file per step, so a later step cannot read what the action
+      # wrote - an assertion here fails even when the summary is correct.
+      # tools/check_action_script.py verifies it in-process, which is the only
+      # place the claim can actually be checked.
+
+      - name: The report artifact must have been uploaded
+        uses: actions/download-artifact@v4
+        with:
+          name: whatbreaks-report
+          path: downloaded
+
+      - name: The artifact must contain a usable report
         run: |
-          # The summary is how a fork PR sees results at all, since no token
-          # there can post a comment.
-          [ -s "$GITHUB_STEP_SUMMARY" ] || { echo "::error::empty job summary"; exit 1; }
-          grep -q "whatbreaks" "$GITHUB_STEP_SUMMARY" || { echo "::error::summary missing report"; exit 1; }
-          echo "OK: job summary written"
+          set -euo pipefail
+          ls -la downloaded
+          [ -s downloaded/report.md ] || { echo "::error::report.md missing or empty"; exit 1; }
+          [ -s downloaded/report.json ] || { echo "::error::report.json missing or empty"; exit 1; }
+          grep -q '"schema_version"' downloaded/report.json || { echo "::error::JSON is not a whatbreaks report"; exit 1; }
+          echo "OK: artifact contains both reports"
 
   reports-nothing-on-a-no-op:
     # The other half. An action that always cries wolf is worse than none.
