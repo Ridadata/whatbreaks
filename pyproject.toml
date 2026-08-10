@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "whatbreaks"
-version = "0.1.0"
+version = "0.2.0"
 description = "Static breaking-change analysis for dbt. Column-level blast radius in CI - no warehouse, no secrets, no backend."
 readme = "README.md"
 requires-python = ">=3.10"

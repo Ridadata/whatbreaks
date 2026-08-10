@@ -1,0 +1,82 @@
+# whatbreaks — comment job (trusted half of the fork-safe pattern)
+#
+# Copy this into .github/workflows/ of your dbt repo, alongside whatbreaks.yml.
+#
+# WHY THIS EXISTS
+#
+# A `pull_request` run from a fork gets a read-only GITHUB_TOKEN, so the
+# analysis job cannot post its own results. The obvious fix - switching to
+# `pull_request_target` - is the documented "pwn request" vulnerability: that
+# event runs with a WRITE token and repository secrets, and checking out the
+# pull request's code under it hands both to an attacker.
+#
+# So the work is split. The analysis job runs untrusted code with nothing worth
+# stealing. This job holds the write permission but NEVER checks out the pull
+# request's code; it only reads an artifact, treats it as untrusted data, and
+# posts it.
+
+name: whatbreaks comment
+
+on:
+  workflow_run:
+    workflows: ["whatbreaks"]
+    types: [completed]
+
+permissions:
+  contents: read
+  pull-requests: write
+
+jobs:
+  comment:
+    runs-on: ubuntu-latest
+    if: github.event.workflow_run.event == 'pull_request'
+    steps:
+      # NOTE: no actions/checkout. Nothing from the pull request is executed
+      # here, which is the entire point of this job.
+      - name: Download the report
+        uses: actions/download-artifact@v4
+        with:
+          name: whatbreaks-report
+          run-id: ${{ github.event.workflow_run.id }}
+          github-token: ${{ github.token }}
+          path: report
+
+      - name: Validate the artifact
+        id: check
+        run: |
+          set -euo pipefail
+          # The artifact came from a job that ran a contributor's code, so every
+          # value out of it is untrusted until proven otherwise.
+          pr="$(cat report/pr-number)"
+          if ! [[ "$pr" =~ ^[0-9]+$ ]]; then
+            echo "::error::pr-number is not an integer; refusing to proceed"
+            exit 1
+          fi
+          if [ ! -s report/report.md ]; then
+            echo "::error::report.md is missing or empty"
+            exit 1
+          fi
+          # Cap the size: a generated project should not be able to post a
+          # comment large enough to break the page.
+          head -c 60000 report/report.md > report/comment.md
+          echo "pr=$pr" >> "$GITHUB_OUTPUT"
+          if grep -q '"failed": true' report/report.json 2>/dev/null; then
+            echo "failed=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "failed=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Post or update the comment
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PR: ${{ steps.check.outputs.pr }}
+        run: |
+          # --edit-last keeps one rolling comment rather than one per push.
+          gh pr comment "$PR" --repo "${{ github.repository }}" \
+            --body-file report/comment.md --edit-last --create-if-none
+
+      - name: Reflect the result in this job's status
+        if: steps.check.outputs.failed == 'true'
+        run: |
+          echo "::error::whatbreaks found breaking changes - see the pull request comment."
+          exit 1

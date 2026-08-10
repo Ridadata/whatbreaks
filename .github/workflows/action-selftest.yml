@@ -1,0 +1,85 @@
+# Proves the action works, rather than assuming it does.
+#
+# It runs the real composite action against the committed quickstart example,
+# which contains a known breaking change, and asserts the outcome. An action
+# that has never been executed is not a shipped feature.
+
+name: Action self-test
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "action/**"
+      - "examples/**"
+      - "src/**"
+      - ".github/workflows/action-selftest.yml"
+  pull_request:
+    paths:
+      - "action/**"
+      - "examples/**"
+      - "src/**"
+      - ".github/workflows/action-selftest.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  detects-a-breaking-change:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Run the action on the quickstart example
+        id: wb
+        uses: ./action
+        with:
+          base-manifest: examples/quickstart/base/target/manifest.json
+          head-manifest: examples/quickstart/head/target/manifest.json
+          # Exercise the checkout, not a published release: this must pass
+          # before 0.2.0 exists on PyPI.
+          install-spec: "."
+          # We assert on the output instead of letting the step fail.
+          fail-on-findings: "false"
+
+      - name: It must have found the break
+        env:
+          FAILED: ${{ steps.wb.outputs.failed }}
+          REPORT: ${{ steps.wb.outputs.markdown-file }}
+        run: |
+          set -euo pipefail
+          echo "--- report ---"; cat "$REPORT"; echo "--------------"
+
+          [ "$FAILED" = "true" ] || { echo "::error::expected findings, got failed=$FAILED"; exit 1; }
+          grep -q "stg_orders.status" "$REPORT" || { echo "::error::the removed column is not named"; exit 1; }
+          grep -qi "breaking" "$REPORT" || { echo "::error::not reported as breaking"; exit 1; }
+          echo "OK: the action detected the breaking change"
+
+      - name: It must write a job summary
+        run: |
+          # The summary is how a fork PR sees results at all, since no token
+          # there can post a comment.
+          [ -s "$GITHUB_STEP_SUMMARY" ] || { echo "::error::empty job summary"; exit 1; }
+          grep -q "whatbreaks" "$GITHUB_STEP_SUMMARY" || { echo "::error::summary missing report"; exit 1; }
+          echo "OK: job summary written"
+
+  reports-nothing-on-a-no-op:
+    # The other half. An action that always cries wolf is worse than none.
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Compare the base against itself
+        id: wb
+        uses: ./action
+        with:
+          base-manifest: examples/quickstart/base/target/manifest.json
+          head-manifest: examples/quickstart/base/target/manifest.json
+          install-spec: "."
+
+      - name: It must be clean
+        env:
+          FAILED: ${{ steps.wb.outputs.failed }}
+        run: |
+          [ "$FAILED" = "false" ] || { echo "::error::false positive on a no-op"; exit 1; }
+          echo "OK: no findings on an unchanged project"

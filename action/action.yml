@@ -1,0 +1,175 @@
+name: whatbreaks
+description: Report what a dbt change breaks downstream. Column-level blast radius, no warehouse.
+author: Rida Aderkane
+
+branding:
+  icon: git-pull-request
+  color: red
+
+# A COMPOSITE action, deliberately. A Docker action would pull an image on every
+# run and only work on Linux; a JS action would need a committed dist/ and would
+# shell out to Python anyway. This keeps the CLI as the single source of truth.
+#
+# It does analysis ONLY. It never posts a comment and never needs a token, which
+# is what lets it run on pull requests from forks. Posting is a separate, trusted
+# job - see docs/github-action.md.
+
+inputs:
+  base-manifest:
+    description: manifest.json from the base commit.
+    required: true
+  head-manifest:
+    description: manifest.json from the change under review.
+    required: true
+  base-root:
+    description: >-
+      dbt project root for the base manifest. Inferred from
+      <root>/target/manifest.json when omitted. Unlocks seed CSV headers and
+      project vars, which improve resolution.
+    required: false
+    default: ""
+  head-root:
+    description: dbt project root for the head manifest.
+    required: false
+    default: ""
+  fail-on:
+    description: >-
+      Minimum severity that fails the run - breaking, possibly-breaking, or
+      never. Uncertainty is always reported; failing CI on it is opt-in.
+    required: false
+    default: breaking
+  version:
+    description: whatbreaks version to install. Pin this for reproducible runs.
+    required: false
+    default: "0.2.0"
+  install-spec:
+    description: >-
+      Advanced. Overrides `version` with a raw pip specifier - a path, a VCS
+      ref, anything pip accepts. This repository's own self-test uses it to
+      exercise the action against the checkout rather than a published release.
+    required: false
+    default: ""
+  python-version:
+    description: Python used to run whatbreaks.
+    required: false
+    default: "3.12"
+  fail-on-findings:
+    description: >-
+      Whether findings should fail this step. Set false when a later job needs
+      to post the results first.
+    required: false
+    default: "true"
+  comment:
+    description: >-
+      Post results as a pull-request comment directly. Only works when the
+      workflow has pull-requests:write, which a fork PR never does - use the
+      two-workflow pattern instead. Off by default.
+    required: false
+    default: "false"
+
+outputs:
+  failed:
+    description: "true when findings reached the fail-on threshold."
+    value: ${{ steps.run.outputs.failed }}
+  markdown-file:
+    description: Path to the rendered markdown report.
+    value: ${{ steps.run.outputs.markdown-file }}
+  json-file:
+    description: Path to the JSON report (carries its own schema_version).
+    value: ${{ steps.run.outputs.json-file }}
+
+runs:
+  using: composite
+  steps:
+    - name: Set up Python
+      uses: actions/setup-python@v5
+      with:
+        python-version: ${{ inputs.python-version }}
+
+    - name: Install whatbreaks
+      shell: bash
+      env:
+        WB_VERSION: ${{ inputs.version }}
+        WB_SPEC: ${{ inputs.install-spec }}
+      run: |
+        set -euo pipefail
+        spec="${WB_SPEC:-whatbreaks==${WB_VERSION}}"
+        echo "installing: $spec"
+        python -m pip install --disable-pip-version-check --quiet "$spec"
+
+    - name: Analyse
+      id: run
+      shell: bash
+      env:
+        # Quoted through the environment rather than interpolated into the
+        # script: an input containing `"; rm -rf /` must stay a string.
+        WB_BASE: ${{ inputs.base-manifest }}
+        WB_HEAD: ${{ inputs.head-manifest }}
+        WB_BASE_ROOT: ${{ inputs.base-root }}
+        WB_HEAD_ROOT: ${{ inputs.head-root }}
+        WB_FAIL_ON: ${{ inputs.fail-on }}
+      run: |
+        set -uo pipefail
+        outdir="${RUNNER_TEMP}/whatbreaks"
+        mkdir -p "$outdir"
+
+        args=(check --base "$WB_BASE" --head "$WB_HEAD" --fail-on "$WB_FAIL_ON")
+        [ -n "$WB_BASE_ROOT" ] && args+=(--base-root "$WB_BASE_ROOT")
+        [ -n "$WB_HEAD_ROOT" ] && args+=(--head-root "$WB_HEAD_ROOT")
+
+        whatbreaks "${args[@]}" --format markdown > "$outdir/report.md"
+        status=$?
+        whatbreaks "${args[@]}" --format json > "$outdir/report.json" || true
+
+        # Exit 2 means we could not obtain usable input - that is a broken run,
+        # not a finding, and must not be reported as "nothing breaks".
+        if [ "$status" -eq 2 ]; then
+          echo "::error::whatbreaks could not analyse the project (exit 2)."
+          cat "$outdir/report.md" || true
+          exit 2
+        fi
+
+        echo "failed=$([ "$status" -eq 1 ] && echo true || echo false)" >> "$GITHUB_OUTPUT"
+        echo "markdown-file=$outdir/report.md" >> "$GITHUB_OUTPUT"
+        echo "json-file=$outdir/report.json" >> "$GITHUB_OUTPUT"
+
+        # The job summary works even on a fork PR, where no token can post a
+        # comment. It means the result is never invisible.
+        cat "$outdir/report.md" >> "$GITHUB_STEP_SUMMARY"
+
+    - name: Record the pull request number
+      if: github.event_name == 'pull_request' || github.event_name == 'pull_request_target'
+      shell: bash
+      env:
+        PR_NUMBER: ${{ github.event.number }}
+      run: |
+        # Written as a plain integer for the trusted job to read back. It is
+        # validated again on that side; an artifact from a fork is untrusted.
+        printf '%s' "${PR_NUMBER}" > "${RUNNER_TEMP}/whatbreaks/pr-number"
+
+    - name: Upload report
+      uses: actions/upload-artifact@v4
+      with:
+        name: whatbreaks-report
+        path: ${{ runner.temp }}/whatbreaks/
+        retention-days: 7
+        if-no-files-found: error
+
+    - name: Comment on the pull request
+      if: inputs.comment == 'true' && github.event_name == 'pull_request'
+      shell: bash
+      env:
+        GH_TOKEN: ${{ github.token }}
+        PR_NUMBER: ${{ github.event.number }}
+        REPORT: ${{ steps.run.outputs.markdown-file }}
+      run: |
+        # --edit-last keeps one rolling comment instead of a new one per push.
+        gh pr comment "$PR_NUMBER" --body-file "$REPORT" --edit-last --create-if-none \
+          || echo "::warning::could not post a comment (expected on a fork PR - use the two-workflow pattern)"
+
+    - name: Fail if findings reached the threshold
+      if: inputs.fail-on-findings == 'true' && steps.run.outputs.failed == 'true'
+      shell: bash
+      run: |
+        echo "::error::whatbreaks found changes at or above the '${{ inputs.fail-on }}' threshold."
+        exit 1

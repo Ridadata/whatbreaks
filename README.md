@@ -103,6 +103,26 @@ whatbreaks check --base ../base/target/manifest.json --head target/manifest.json
 
 **Exit codes** — `0` clean · `1` findings at or above the threshold · `2` bad input (nothing analysed).
 
+## In CI
+
+```yaml
+- uses: Ridadata/whatbreaks/action@v0.2.0
+  with:
+    base-manifest: .base/target/manifest.json
+    head-manifest: target/manifest.json
+```
+
+Ships as **two workflows**, not one — and that split is the point. A `pull_request`
+run from a fork gets a read-only token and no secrets, so it cannot post its own
+results; switching to `pull_request_target` to fix that is the documented
+["pwn request"](https://securitylab.github.com/resources/github-actions-preventing-pwn-requests/)
+vulnerability. So the untrusted job analyses and holds nothing worth stealing, and a
+separate trusted job posts the comment without ever checking out the contributor's code.
+
+Results also go to the run's job summary, so a fork PR still sees them.
+
+[Setup and the security model →](docs/github-action.md)
+
 ## Measured, not asserted
 
 Across 7 public dbt projects (164 models), with **no warehouse**:

@@ -1,0 +1,73 @@
+# whatbreaks — analysis job (untrusted half of the fork-safe pattern)
+#
+# Copy this into .github/workflows/ of your dbt repo, alongside
+# whatbreaks-comment.yml.
+#
+# This job runs on `pull_request`, so on a fork PR it gets a READ-ONLY token and
+# no secrets. That is exactly what we want: it executes the contributor's code
+# (dbt parse renders their Jinja) and therefore must hold nothing worth stealing.
+# It never posts anything. The comment is written by the companion workflow,
+# which never checks out this code.
+#
+# See docs/github-action.md for why `pull_request_target` is NOT used here.
+
+name: whatbreaks
+
+on:
+  pull_request:
+    paths:
+      - "models/**"
+      - "macros/**"
+      - "seeds/**"
+      - "snapshots/**"
+      - "dbt_project.yml"
+      - "packages.yml"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: whatbreaks-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  analyse:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out the pull request
+        uses: actions/checkout@v4
+
+      - name: Check out the base commit
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.base.sha }}
+          path: .base
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      # Adjust to your adapter. `dbt parse` needs no warehouse connection, but
+      # it does need the adapter package and any dbt packages installed.
+      - name: Install dbt
+        run: pip install "dbt-core~=1.9" "dbt-snowflake~=1.9"
+
+      - name: Parse both commits
+        env:
+          # dbt insists on a profile even though parse never connects. Point at
+          # a dummy one rather than putting real credentials in a fork-visible
+          # workflow - there is nothing to connect to and nothing to leak.
+          DBT_PROFILES_DIR: ${{ github.workspace }}/.github/dbt-parse-profile
+        run: |
+          dbt deps && dbt parse
+          cd .base && dbt deps && dbt parse
+
+      - name: whatbreaks
+        uses: Ridadata/whatbreaks/action@v0.2.0
+        with:
+          base-manifest: .base/target/manifest.json
+          head-manifest: target/manifest.json
+          fail-on: breaking
+          # Findings must not fail this job before the report is uploaded and
+          # the comment posted. The companion workflow sets the final status.
+          fail-on-findings: "false"
