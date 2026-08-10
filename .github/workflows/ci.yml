@@ -69,6 +69,11 @@ jobs:
           git diff --exit-code examples/
       - name: README claims hold and its images match the live tool
         run: uv run python tools/verify_readme.py
+      - name: the action's shell script survives GitHub's `bash -e`
+        # A composite action runs with errexit, so a tool that exits 1 to mean
+        # "found something" kills the step before its status can be read. This
+        # runs the shipped script under the same flags; it caught exactly that.
+        run: uv run python tools/check_action_script.py
 
   false-positive-gate:
     # A RELEASE GATE, not a test suite. A linter's false-positive rate decides

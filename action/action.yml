@@ -114,11 +114,17 @@ runs:
         mkdir -p "$outdir"
 
         args=(check --base "$WB_BASE" --head "$WB_HEAD" --fail-on "$WB_FAIL_ON")
-        [ -n "$WB_BASE_ROOT" ] && args+=(--base-root "$WB_BASE_ROOT")
-        [ -n "$WB_HEAD_ROOT" ] && args+=(--head-root "$WB_HEAD_ROOT")
+        # `if` rather than `[ -n "$X" ] && ...`: GitHub runs composite bash with
+        # -e, and a trailing && list that evaluates false is itself a failing
+        # statement, which would abort the step.
+        if [ -n "$WB_BASE_ROOT" ]; then args+=(--base-root "$WB_BASE_ROOT"); fi
+        if [ -n "$WB_HEAD_ROOT" ]; then args+=(--head-root "$WB_HEAD_ROOT"); fi
 
-        whatbreaks "${args[@]}" --format markdown > "$outdir/report.md"
-        status=$?
+        # A non-zero exit is the POINT of this tool - 1 means findings. Under
+        # -e a bare call would kill the step before $? could be read, so the
+        # status is captured with `|| status=$?`, which errexit does not trip.
+        status=0
+        whatbreaks "${args[@]}" --format markdown > "$outdir/report.md" || status=$?
         whatbreaks "${args[@]}" --format json > "$outdir/report.json" || true
 
         # Exit 2 means we could not obtain usable input - that is a broken run,
@@ -129,7 +135,8 @@ runs:
           exit 2
         fi
 
-        echo "failed=$([ "$status" -eq 1 ] && echo true || echo false)" >> "$GITHUB_OUTPUT"
+        if [ "$status" -eq 1 ]; then failed=true; else failed=false; fi
+        echo "failed=$failed" >> "$GITHUB_OUTPUT"
         echo "markdown-file=$outdir/report.md" >> "$GITHUB_OUTPUT"
         echo "json-file=$outdir/report.json" >> "$GITHUB_OUTPUT"
 
