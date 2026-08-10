@@ -6,10 +6,11 @@
 
 Column-level blast radius in CI. No warehouse, no secrets, no backend.
 
+[![PyPI](https://img.shields.io/pypi/v/whatbreaks.svg)](https://pypi.org/project/whatbreaks/)
 [![CI](https://github.com/Ridadata/whatbreaks/actions/workflows/ci.yml/badge.svg)](https://github.com/Ridadata/whatbreaks/actions/workflows/ci.yml)
 [![Python](https://img.shields.io/badge/python-3.10--3.13-blue.svg)](https://www.python.org/downloads/)
 [![License](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
-[![Status](https://img.shields.io/badge/status-v0.1.0%20early-orange.svg)](#status)
+[![Status](https://img.shields.io/badge/status-early-orange.svg)](#status)
 
 <br>
 
@@ -61,11 +62,16 @@ statically, in seconds, for free.
 
 ## Try it
 
-The repo ships a runnable example. No warehouse, no dbt install:
+```bash
+pip install whatbreaks        # or: uv tool install whatbreaks
+```
+
+Four runtime dependencies. No warehouse driver, no service, no account.
+
+The repo ships a runnable example — no warehouse, no dbt install:
 
 ```bash
 git clone https://github.com/Ridadata/whatbreaks && cd whatbreaks
-pip install -e .
 
 whatbreaks check \
   --base examples/quickstart/base/target/manifest.json \
@@ -74,8 +80,6 @@ whatbreaks check \
 
 That is the run in the demo above. See [`examples/quickstart`](examples/quickstart/) for what it
 models.
-
-Four runtime dependencies. No warehouse driver, no service, no account.
 
 ## Use it on your project
 
@@ -98,9 +102,6 @@ whatbreaks check --base ../base/target/manifest.json --head target/manifest.json
 | `--format text \| json \| markdown` | humans · tooling · PR comments |
 
 **Exit codes** — `0` clean · `1` findings at or above the threshold · `2` bad input (nothing analysed).
-
-> **Not on PyPI yet.** The release is prepared but unpublished. This note disappears the moment
-> `pip install whatbreaks` works.
 
 ## Measured, not asserted
 

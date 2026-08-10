@@ -8,9 +8,9 @@ While `0.x`, the JSON output shape and rule severities may change in minor
 releases. `schema_version` in the JSON output is versioned independently so
 consumers can pin to it.
 
-## [0.1.0] — 2026-08-08
+## [0.1.0] — 2026-08-10
 
-First usable release.
+First usable release. [PyPI](https://pypi.org/project/whatbreaks/0.1.0/)
 
 ### Added
 - `whatbreaks check --base <manifest> --head <manifest>` — reports what a change
