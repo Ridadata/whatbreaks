@@ -8,7 +8,7 @@ While `0.x`, the JSON output shape and rule severities may change in minor
 releases. `schema_version` in the JSON output is versioned independently so
 consumers can pin to it.
 
-## [0.2.0] — unreleased
+## [0.2.0] — 2026-08-10
 
 ### Added
 - **GitHub Action.** `Ridadata/whatbreaks/action@v0.2.0`, a composite action that
